@@ -1702,6 +1702,8 @@ inline size_t bytesNeededOnGPU(unsigned int querylen, int min_match_len)
 
 //Gets up to set_size queries.
 extern "C"
+{
+  #include <unistd.h>
     void getQueriesTexture(int qfile,
                            char** queryTexture,
                            size_t* queryTextureSize,
@@ -2083,7 +2085,7 @@ extern "C"
     << memory_avail << " avail) "
     << timer.str(true, 5) << endl;
 }
-
+}
 
 
 struct pathblock
