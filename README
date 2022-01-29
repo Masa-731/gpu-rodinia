@@ -2,7 +2,7 @@ Rodinia Benchmark Suite 3.1
 ===========================
 
 0. Modifications
-1) By https://github.com/yuhc (https://github.com/yuhc/gpu-rodinia):
+1) By yuhc (https://github.com/yuhc/gpu-rodinia):
 Please download the dataset from the [original package][data], or my personal [Dropbox][dropbox] if the Virginia's link is down.
 [data]: http://lava.cs.virginia.edu/Rodinia/download_links.htm
 [dropbox]: https://www.dropbox.com/s/cc6cozpboht3mtu/rodinia-3.1-data.tar.gz
