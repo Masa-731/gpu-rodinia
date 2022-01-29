@@ -2,6 +2,7 @@ Rodinia Benchmark Suite 3.1
 ===========================
 
 0. Modifications
+1) By https://github.com/yuhc (https://github.com/yuhc/gpu-rodinia):
 Please download the dataset from the [original package][data], or my personal [Dropbox][dropbox] if the Virginia's link is down.
 [data]: http://lava.cs.virginia.edu/Rodinia/download_links.htm
 [dropbox]: https://www.dropbox.com/s/cc6cozpboht3mtu/rodinia-3.1-data.tar.gz
@@ -13,6 +14,13 @@ CRC32: 303E69CE
 
 Make sure the Platform 0 is the one needed to be tested, and GPU is the
 device 0 on this platform.
+
+2) By me:
+Fixed some compile errors on current environment (gcc 11.0, clang 14.0, nvcc 11.5 (CUDA toolkit 11.5 with hpc_sdk 21.1) on Linux Mint 20.04 and Linux 5.13.0) 
+and made it compatible with Ampere Architecture GPUs (cc86).
+I have confirmed all of the benchmarks for CUDA and OpenMP can be compiled to generate executable binaries, but haven't done running running and validating results,
+thus runtime errors could still occur.
+Also, as I haven't touched the OpenCL versions at all, compiles for OpenCL are excluded from `make all`.
 
 I. Overview
 
