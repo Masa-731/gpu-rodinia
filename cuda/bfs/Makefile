@@ -6,7 +6,7 @@ INCLUDE := $(CUDA_DIR)/include
 
 SRC = bfs.cu
 
-EXE = bfs.out
+EXE = bfs
 
 release: $(SRC)
 	$(CC) $(SRC) -o $(EXE) -I$(INCLUDE) -I../util -L$(CUDA_LIB_DIR) -DTIMING
@@ -25,4 +25,4 @@ debugenum: $(SRC)
 	$(CC) -g -deviceemu $(SRC) -o $(EXE) -I$(INCLUDE) -L$(CUDA_LIB_DIR) 
 
 clean: $(SRC)
-	rm -f $(EXE) $(EXE).linkinfo result.txt
+	rm -f $(EXE) $(EXE).linkinfo result.txt *.out

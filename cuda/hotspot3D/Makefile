@@ -6,11 +6,11 @@ INCLUDE := $(CUDA_DIR)/include
 
 SRC = 3D.cu
 
-EXE = 3D 
+EXE = 3D
 
 OUTPUT = *.out
 
-FLAGS = -g -G #-arch sm_20 --ptxas-options=-v
+FLAGS = -g -G -arch sm_86 --ptxas-options=-v
 release: $(SRC)
 	$(CC) $(KERNEL_DIM) $(FLAGS) $(SRC) -o $(EXE) -I$(INCLUDE) -L$(CUDA_LIB_DIR) 
 
@@ -24,4 +24,4 @@ debugenum: $(SRC)
 	$(CC) $(KERNEL_DIM) $(FLAGS) -g -deviceemu $(SRC) -o $(EXE) -I$(INCLUDE) -L$(CUDA_LIB_DIR) 
 
 clean: $(SRC)
-	rm -f $(EXE) $(EXE).linkinfo $(OUTPUT) 
+	rm -f $(EXE) $(EXE).linkinfo $(OUTPUT)

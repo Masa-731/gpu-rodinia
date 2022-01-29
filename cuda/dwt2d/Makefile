@@ -9,7 +9,7 @@ cudagdb=0 #compile for use with cuda-gdb, note that 'dbg' must be 1 as well
 performancetest=1
 
 # NVCC Options
-NVCCFLAGS += -arch sm_20
+NVCCFLAGS += -arch sm_86
 
 # Files
 CFILES := 
@@ -65,7 +65,7 @@ ifeq ($(dbg),1)
     ifeq ($(cudagdb),1)
         NVCCFLAGS += -G
     endif
-else 
+else
     COMMONFLAGS += -O2 
     NVCCFLAGS   += --compiler-options -fno-strict-aliasing
     CXXFLAGS    += -fno-strict-aliasing
@@ -93,7 +93,7 @@ COBJS=$(CFILES:.c=.c.o)
 CXXOBJS=$(CXXFILES:.cpp=.cpp.o)
 CUOBJS=$(CUFILES:.cu=.cu.o)
 
-.SUFFIXES: .c.o .cpp.o .cu.o .cu 
+.SUFFIXES: .c.o .cpp.o .cu.o .cu
 
 %.c.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -104,9 +104,10 @@ CUOBJS=$(CUFILES:.cu=.cu.o)
 %.cpp.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(EXECUTABLE): $(COBJS) $(CXXOBJS) $(CUOBJS) 
+$(EXECUTABLE): $(COBJS) $(CXXOBJS) $(CUOBJS)
 	$(LINK) -o $(EXECUTABLE) $(COBJS) $(CXXOBJS) $(CUOBJS) $(LDFLAGS)
 
 clean:
 	rm -f $(COBJS) $(CXXOBJS) $(CUOBJS) $(EXECUTABLE)
-	rm *.bmp.dwt.*		
+	rm *.bmp.dwt.*
+	rm -f dwt2d *.o

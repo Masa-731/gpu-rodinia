@@ -1,7 +1,7 @@
 include ../../common/make.config
 CC := $(CUDA_DIR)/bin/nvcc
 
-CC_FLAGS = -arch=sm_20
+CC_FLAGS = -arch=sm_86
 
 ifdef VERIFY
 override VERIFY = -DVERIFY
@@ -20,4 +20,4 @@ hybridsort: main.cu  bucketsort.cu bucketsort.cuh bucketsort_kernel.cu histogram
 
 
 clean:
-	rm	*.o hybridsort
+	rm	-f *.o hybridsort
