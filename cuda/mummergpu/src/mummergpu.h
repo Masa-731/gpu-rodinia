@@ -193,7 +193,18 @@ int createMatchContext(Reference* ref,
                        char* texFilename,
                        MatchContext* ctx);
 
-                       
+void getQueriesTexture(int qfile,
+                           char** queryTexture,
+                           size_t* queryTextureSize,
+                           int** queryAddrs,
+                           char*** queryNames,
+                           int** queryLengths,
+                           unsigned int* numQueries,
+                           unsigned int* num_match_coords,
+                           unsigned int memory_avail,
+                           int min_match_length,
+                           bool rc);
+
 int destroyMatchContext(MatchContext* ctx);
 
 

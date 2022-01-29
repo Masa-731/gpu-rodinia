@@ -15,10 +15,10 @@
 #include <vector_types.h>
 
 // includes, kernels
-#include <common.cu>
+#include "common.cu"
 
-#include <mummergpu.h>
-#include <mummergpu_kernel.cu>
+#include "mummergpu.h"
+#include "mummergpu_kernel.cu"
 
 int USE_PRINT_KERNEL = 1;
 
@@ -105,7 +105,7 @@ unsigned int num_bind_tex_calls = 0;
 // declaration, forward
 void runTest( int argc, char** argv);
 
-extern "C"
+extern "C" 
 void computeGold(MatchResults* results, 
 				 char* refstr, 
 				 char* queries, 
@@ -457,7 +457,7 @@ void buildReferenceTexture(Reference* ref,
 
 }
 
-void boardMemory(unsigned int * free_mem, unsigned int * total_mem)
+void boardMemory(size_t * free_mem, size_t * total_mem)
 {
   // The emulator doesn't allow calls to cuMemGetInfo
 
@@ -1070,8 +1070,8 @@ void loadResultBuffer(MatchContext* ctx)
 	fprintf(stderr, "Allocating result array for %d queries (%d bytes) ...", 
 			numQueries, numCoords*sizeof(MatchCoord) );
 	
-    unsigned int boardFreeMemory = 0;
-    unsigned int total_mem = 0;
+    size_t boardFreeMemory = 0;
+    size_t total_mem = 0;
 
 	boardMemory(&boardFreeMemory, &total_mem);
 
@@ -1508,8 +1508,8 @@ void getExactAlignments(MatchContext * ctx, ReferencePage * page, bool on_cpu)
 {
     assert(!ctx->reverse && !ctx->forwardreverse);
     
-    unsigned int boardFreeMemory;
-    unsigned int total_mem;
+    size_t boardFreeMemory;
+    size_t total_mem;
 
     if (!on_cpu)
 	{
@@ -2072,8 +2072,8 @@ int matchSubset(MatchContext* ctx,
 
 int getFreeDeviceMemory(bool on_cpu)
 {
-	unsigned int free_mem = 0;
-	unsigned int total_mem = 0;
+	size_t free_mem = 0;
+	size_t total_mem = 0;
 	
 	// We have to 'prime' CUDA by making an allocation here.  cuMemGetInfo 
 	// will return zeroes until we do a malloc.

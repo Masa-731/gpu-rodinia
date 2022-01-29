@@ -15,10 +15,10 @@
 #include <vector_types.h>
 
 // includes, kernels
-#include <common.cu>
+#include "common.cu"
 
-#include <mummergpu.h>
-#include <mummergpu_kernel.cu>
+#include "mummergpu.h"
+#include "mummergpu_kernel.cu"
 
 int USE_PRINT_KERNEL = 1;
 
@@ -105,7 +105,7 @@ unsigned int num_bind_tex_calls = 0;
 // declaration, forward
 void runTest( int argc, char** argv);
 
-extern "C"
+extern "C" 
 void computeGold(MatchResults* results, 
 				 char* refstr, 
 				 char* queries, 
