@@ -1,3 +1,6 @@
+Dependency:
+`libglew-dev` and `freeglut3-dev` packages
+
 USAGE:
 make clean
 make OUTPUT=Y VERIFY=Y TIMER=Y

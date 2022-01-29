@@ -97,3 +97,5 @@ This work was supported in part by National Institutes of Health grants
 R01-LM006845 and R01-LM007938, and National Science Foundation CISE RI grant
 CNS 04-03313.
 
+Dependency:
+`libgl1-mesa-dev` and `libglu1-mesa-dev` packages
