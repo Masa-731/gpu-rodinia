@@ -1,6 +1,8 @@
 data/*
 !data/.gitkeep
+bin
 
+*.a
 *.o
 *.orig
 *.swp
