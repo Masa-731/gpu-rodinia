@@ -114,26 +114,17 @@ void BFSGraph( int argc, char** argv)
 	printf("Start traversing the tree\n");
 	
 	int k=0;
-#ifdef OPEN
-        double start_time = omp_get_wtime();
-#ifdef OMP_OFFLOAD
-#pragma omp target data map(to: no_of_nodes, h_graph_mask[0:no_of_nodes], h_graph_nodes[0:no_of_nodes], h_graph_edges[0:edge_list_size], h_graph_visited[0:no_of_nodes], h_updating_graph_mask[0:no_of_nodes]) map(h_cost[0:no_of_nodes])
+    double start_time = omp_get_wtime();
+
+#pragma acc data copyin(no_of_nodes, h_graph_mask[0:no_of_nodes], h_graph_nodes[0:no_of_nodes], h_graph_edges[0:edge_list_size], h_graph_visited[0:no_of_nodes], h_updating_graph_mask[0:no_of_nodes]) copy(h_cost[0:no_of_nodes])
         {
-#endif 
-#endif
 	bool stop;
 	do
         {
             //if no thread changes this value then the loop stops
             stop=false;
 
-#ifdef OPEN
-            //omp_set_num_threads(num_omp_threads);
-    #ifdef OMP_OFFLOAD
-    #pragma omp target
-    #endif
-    #pragma omp parallel for 
-#endif 
+#pragma acc parallel loop
             for(int tid = 0; tid < no_of_nodes; tid++ )
             {
                 if (h_graph_mask[tid] == true){ 
@@ -150,12 +141,7 @@ void BFSGraph( int argc, char** argv)
                 }
             }
 
-#ifdef OPEN
-    #ifdef OMP_OFFLOAD
-    #pragma omp target map(stop)
-    #endif
-    #pragma omp parallel for
-#endif
+#pragma acc parallel loop
             for(int tid=0; tid< no_of_nodes ; tid++ )
             {
                 if (h_updating_graph_mask[tid] == true){
@@ -168,13 +154,11 @@ void BFSGraph( int argc, char** argv)
             k++;
         }
 	while(stop);
-#ifdef OPEN
-        double end_time = omp_get_wtime();
-        printf("Compute time: %lf\n", (end_time - start_time));
-#ifdef OMP_OFFLOAD
+
+    double end_time = omp_get_wtime();
+    printf("Compute time: %lf\n", (end_time - start_time));
         }
-#endif
-#endif
+
 	//Store the result into a file
 	FILE *fpo = fopen("result.txt","w");
 	for(int i=0;i<no_of_nodes;i++)
