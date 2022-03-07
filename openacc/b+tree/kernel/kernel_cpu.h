@@ -10,6 +10,7 @@ void
 kernel_cpu(	int cores_arg,
 
 			record *records,
+			long records_elem,
 			knode *knodes,
 			long knodes_elem,
 

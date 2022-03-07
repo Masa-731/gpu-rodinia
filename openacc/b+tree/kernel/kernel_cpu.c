@@ -34,6 +34,7 @@ void
 kernel_cpu(	int cores_arg,
 
 			record *records,
+			long records_elem,
 			knode *knodes,
 			long knodes_elem,
 
@@ -71,8 +72,6 @@ kernel_cpu(	int cores_arg,
 	int threadsPerBlock;
 	threadsPerBlock = order < 1024 ? order : 1024;
 
-	time1 = get_time();
-
 	//======================================================================================================================================================150
 	//	PROCESS INTERACTIONS
 	//======================================================================================================================================================150
@@ -83,13 +82,21 @@ kernel_cpu(	int cores_arg,
 	int i;
 
 	// process number of querries
-	#pragma omp parallel for private (i, thid)
+#pragma acc data copy(records[0:records_elem], knodes[0:knodes_elem], currKnode[0:count], offset[0:count], keys[0:count], ans[0:count])
+{
+	time1 = get_time();
+
+#pragma acc kernels
+{
+#pragma acc loop independent private(thid, bid, i)
 	for(bid = 0; bid < count; bid++){
 
 		// process levels of the tree
+//#pragma acc loop independent
 		for(i = 0; i < maxheight; i++){
 
 			// process all leaves at each level
+#pragma acc loop independent
 			for(thid = 0; thid < threadsPerBlock; thid++){
 
 				// if value is between the two keys
@@ -112,6 +119,7 @@ kernel_cpu(	int cores_arg,
 		//At this point, we have a candidate leaf node which may contain
 		//the target record.  Check each key to hopefully find the record
 		// process all leaves at each level
+#pragma acc loop independent
 		for(thid = 0; thid < threadsPerBlock; thid++){
 
 			if(knodes[currKnode[bid]].keys[thid] == keys[bid]){
@@ -122,7 +130,11 @@ kernel_cpu(	int cores_arg,
 
 	}
 
+}
+
 	time2 = get_time();
+
+}
 
 	//======================================================================================================================================================150
 	//	DISPLAY TIMING

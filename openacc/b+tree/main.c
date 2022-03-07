@@ -2190,6 +2190,7 @@ main(	int argc,
 				kernel_cpu(	cores_arg,
 
 							records,
+							records_elem,
 							knodes,
 							knodes_elem,
 

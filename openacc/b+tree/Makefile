@@ -1,6 +1,7 @@
 C_C = nvc #gcc
 OMP_LIB = -lgomp
 OMP_FLAG = -mp #-fopenmp
+ACC_FLAG = -acc -Minfo=accel -gpu=cc86 -tp=host
 
 # ========================================================================================================================================================================================================200
 #	EXECUTABLES (LINK OBJECTS TOGETHER INTO BINARY)
@@ -17,6 +18,7 @@ b+tree.out:	./main.o \
 			./util/timer/timer.o \
 			./util/num/num.o \
 			-lm \
+			$(ACC_FLAG) \
                         -o b+tree.out
 # ========================================================================================================================================================================================================200
 #	OBJECTS (COMPILE SOURCE FILES INTO OBJECTS)
@@ -45,7 +47,8 @@ main.o:	./common.h \
 			-c \
 			-o ./kernel/kernel_cpu.o \
 			-O3 \
-			$(OMP_FLAG)
+			$(OMP_FLAG) \
+			$(ACC_FLAG)
 
 ./kernel/kernel_cpu_2.o:./common.h \
 						./kernel/kernel_cpu_2.h \
@@ -54,7 +57,8 @@ main.o:	./common.h \
 			-c \
 			-o ./kernel/kernel_cpu_2.o \
 			-O3 \
-			$(OMP_FLAG)
+			$(OMP_FLAG) \
+			$(ACC_FLAG)
 
 # ======================================================================================================================================================150
 #	UTILITIES
