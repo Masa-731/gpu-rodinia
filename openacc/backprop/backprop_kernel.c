@@ -43,17 +43,43 @@ void bpnn_train_kernel(BPNN *net, float *eo, float *eh)
 {
   int in, hid, out;
   float out_err, hid_err;
+  float *input_units, *hidden_units, *output_units;
+  float **input_weights, **hidden_weights;
+  float *target, *hidden_delta, *output_delta;
+  float **hidden_prev_weights, **input_prev_weights;
   
   in = net->input_n;
   hid = net->hidden_n;
   out = net->output_n;   
-   
+
+  input_units = net->input_units;
+  hidden_units = net->hidden_units;
+  output_units = net->output_units;
+
+  input_weights = net->input_weights;
+  hidden_weights = net->hidden_weights;
+
+  target = net->target;
+  hidden_delta = net->hidden_delta;
+  output_delta = net->output_delta;
+
+  hidden_prev_weights = net->hidden_prev_weights;
+  input_prev_weights = net->input_prev_weights;
+
+#pragma acc data copyin(input_units[0:in+1]) \
+  create(hidden_units[0:hid+1], output_units[0:out+1]) \
+  create(input_weights[0:in+1][0:hid+1], hidden_weights[0:hid+1][0:out+1]) \
+  create(hidden_delta[0:hid+1], output_delta[0:out+1]) \
+  create(input_prev_weights[0:in+1][0:hid+1], hidden_prev_weights[0:hid+1][0:out+1]) \
+  copyin(target[0:out+1])
+{
   printf("Performing CPU computation\n");
-  bpnn_layerforward(net->input_units, net->hidden_units,net->input_weights, in, hid);
-  bpnn_layerforward(net->hidden_units, net->output_units, net->hidden_weights, hid, out);
-  bpnn_output_error(net->output_delta, net->target, net->output_units, out, &out_err);
-  bpnn_hidden_error(net->hidden_delta, hid, net->output_delta, out, net->hidden_weights, net->hidden_units, &hid_err);  
-  bpnn_adjust_weights(net->output_delta, out, net->hidden_units, hid, net->hidden_weights, net->hidden_prev_weights);
-  bpnn_adjust_weights(net->hidden_delta, hid, net->input_units, in, net->input_weights, net->input_prev_weights);
+  bpnn_layerforward(input_units, hidden_units, input_weights, in, hid);
+  bpnn_layerforward(hidden_units, output_units, hidden_weights, hid, out);
+  bpnn_output_error(output_delta, target, output_units, out, &out_err);
+  bpnn_hidden_error(hidden_delta, hid, output_delta, out, hidden_weights, hidden_units, &hid_err);
+  bpnn_adjust_weights(output_delta, out, hidden_units, hid, hidden_weights, hidden_prev_weights);
+  bpnn_adjust_weights(hidden_delta, hid, input_units, in, input_weights, input_prev_weights);
+} /* end acc data */
 
 }

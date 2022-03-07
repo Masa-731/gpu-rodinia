@@ -7,12 +7,10 @@
  ******************************************************************
  */
 
-#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "backprop.h"
 #include <math.h>
-#define OPEN
 
 #define ABS(x)          (((x) > 0.0) ? (x) : (-(x)))
 
@@ -26,6 +24,11 @@
   for (_i = 0; _i < _l; _i++) *_to++ = *_from++;\
 }
 
+/*** The squashing function.  Currently, it's a sigmoid. ***/
+
+#define SQUASH(x)       (1.0 / (1.0 + exp(-x)))
+
+
 /*** Return random number between 0.0 and 1.0 ***/
 float drnd()
 {
@@ -38,23 +41,10 @@ float dpn1()
   return ((drnd() * 2.0) - 1.0);
 }
 
-/*** The squashing function.  Currently, it's a sigmoid. ***/
-
-float squash(x)
-float x;
-{
-  float m;
-  //x = -x;
-  //m = 1 + x + x*x/2 + x*x*x/6 + x*x*x*x/24 + x*x*x*x*x/120;
-  //return(1.0 / (1.0 + m));
-  return (1.0 / (1.0 + exp(-x)));
-}
-
 
 /*** Allocate 1d array of floats ***/
 
-float *alloc_1d_dbl(n)
-int n;
+float *alloc_1d_dbl(int n)
 {
   float *new;
 
@@ -67,10 +57,9 @@ int n;
 }
 
 
-/*** Allocate 2d array of floats ***/
+/*** Allocate contiguous 2d array of floats ***/
 
-float **alloc_2d_dbl(m, n)
-int m, n;
+float **alloc_2d_dbl(int m, int n)
 {
   int i;
   float **new;
@@ -81,17 +70,24 @@ int m, n;
     return (NULL);
   }
 
-  for (i = 0; i < m; i++) {
-    new[i] = alloc_1d_dbl(n);
+  new[0] = (float *) malloc ((unsigned) (m * n * sizeof (float)));
+  for (i = 1 ; i < m; i++) {
+    new[i] = new[i-1] + n;
   }
 
   return (new);
 }
 
 
-bpnn_randomize_weights(w, m, n)
-float **w;
-int m, n;
+/*** Deallocate contiguous 2d array ***/
+
+void free_2d(float **mem)
+{
+    free((float *)mem[0]);
+}
+
+
+void bpnn_randomize_weights(float **w, int m, int n)
 {
   int i, j;
 
@@ -103,9 +99,7 @@ int m, n;
   }
 }
 
-bpnn_randomize_row(w, m)
-float *w;
-int m;
+void bpnn_randomize_row(float *w, int m)
 {
 	int i;
 	for (i = 0; i <= m; i++) {
@@ -115,9 +109,7 @@ int m;
 }
 
 
-bpnn_zero_weights(w, m, n)
-float **w;
-int m, n;
+void bpnn_zero_weights(float **w, int m, int n)
 {
   int i, j;
 
@@ -136,8 +128,7 @@ void bpnn_initialize(seed)
 }
 
 
-BPNN *bpnn_internal_create(n_in, n_hidden, n_out)
-int n_in, n_hidden, n_out;
+BPNN *bpnn_internal_create(int n_in, int n_hidden, int n_out)
 {
   BPNN *newnet;
 
@@ -168,8 +159,7 @@ int n_in, n_hidden, n_out;
 }
 
 
-void bpnn_free(net)
-BPNN *net;
+void bpnn_free(BPNN *net)
 {
   int n1, n2, i;
 
@@ -184,17 +174,11 @@ BPNN *net;
   free((char *) net->output_delta);
   free((char *) net->target);
 
-  for (i = 0; i <= n1; i++) {
-    free((char *) net->input_weights[i]);
-    free((char *) net->input_prev_weights[i]);
-  }
-  free((char *) net->input_weights);
-  free((char *) net->input_prev_weights);
+  free_2d(net->input_weights);
+  free_2d(net->input_prev_weights);
+  free_2d(net->hidden_weights);
+  free_2d(net->hidden_prev_weights);
 
-  for (i = 0; i <= n2; i++) {
-    free((char *) net->hidden_weights[i]);
-    free((char *) net->hidden_prev_weights[i]);
-  }
   free((char *) net->hidden_weights);
   free((char *) net->hidden_prev_weights);
 
@@ -211,8 +195,7 @@ BPNN *net;
      error computations, etc).
 ***/
 
-BPNN *bpnn_create(n_in, n_hidden, n_out)
-int n_in, n_hidden, n_out;
+BPNN *bpnn_create(int n_in, int n_hidden, int n_out)
 {
 
   BPNN *newnet;
@@ -232,39 +215,36 @@ int n_in, n_hidden, n_out;
 }
 
 
-void bpnn_layerforward(l1, l2, conn, n1, n2)
-float *l1, *l2, **conn;
-int n1, n2;
+void bpnn_layerforward(float *l1, float *l2, float **conn, int n1, int n2)
 {
   float sum;
   int j, k;
 
   /*** Set up thresholding unit ***/
+  #pragma acc kernels present(l1[0:n1+1])
   l1[0] = 1.0;
-#ifdef OPEN
-  omp_set_num_threads(NUM_THREAD);
-  #pragma omp parallel for shared(conn, n1, n2, l1) private(k, j) reduction(+: sum) schedule(static)
-#endif 
+
+  #pragma acc parallel loop present(l1[0:n1+1],l2[0:n2+1],conn[0:n1+1][0:n2+1])
   /*** For each unit in second layer ***/
   for (j = 1; j <= n2; j++) {
 
     /*** Compute weighted sum of its inputs ***/
     sum = 0.0;
+    #pragma acc loop reduction(+:sum)
     for (k = 0; k <= n1; k++) {	
       sum += conn[k][j] * l1[k]; 
     }
-    l2[j] = squash(sum);
+    l2[j] = SQUASH(sum);
   }
 }
 
-//extern "C"
-void bpnn_output_error(delta, target, output, nj, err)  
-float *delta, *target, *output, *err;
-int nj;
+
+void bpnn_output_error(float *delta, float *target, float *output, int nj, float *err)
 {
   int j;
   float o, t, errsum;
   errsum = 0.0;
+  #pragma acc parallel loop reduction(+:errsum) present(delta[0:nj+1],target[0:nj+1],output[0:nj+1])
   for (j = 1; j <= nj; j++) {
     o = output[j];
     t = target[j];
@@ -275,23 +255,23 @@ int nj;
 }
 
 
-void bpnn_hidden_error(delta_h,   
-					   nh, 
-					   delta_o, 
-					   no, 
-					   who, 
-					   hidden, 
-					   err)
-float *delta_h, *delta_o, *hidden, **who, *err;
-int nh, no;
+void bpnn_hidden_error(float *delta_h,   
+					   int nh, 
+					   float *delta_o, 
+					   int no, 
+					   float **who, 
+					   float *hidden, 
+					   float *err)
 {
   int j, k;
   float h, sum, errsum;
 
   errsum = 0.0;
+  #pragma acc parallel loop reduction(+:errsum) present(delta_h[0:nh+1],delta_o[0:no+1],who[0:nh+1][0:no+1],hidden[0:nh+1])
   for (j = 1; j <= nh; j++) {
     h = hidden[j];
     sum = 0.0;
+    #pragma acc loop reduction(+:sum)
     for (k = 1; k <= no; k++) {
       sum += delta_o[k] * who[j][k];
     }
@@ -302,8 +282,7 @@ int nh, no;
 }
 
 
-void bpnn_adjust_weights(delta, ndelta, ly, nly, w, oldw)
-float *delta, *ly, **w, **oldw;
+void bpnn_adjust_weights(float *delta, int ndelta, float *ly, int nly, float **w, float **oldw)
 {
   float new_dw;
   int k, j;
@@ -311,14 +290,9 @@ float *delta, *ly, **w, **oldw;
   //eta = 0.3;
   //momentum = 0.3;
 
-#ifdef OPEN
-  omp_set_num_threads(NUM_THREAD);
-  #pragma omp parallel for  \
-      shared(oldw, w, delta) \
-	  private(j, k, new_dw) \
-	  firstprivate(ndelta, nly) 
-#endif 
+  #pragma acc parallel loop present(delta[0:ndelta+1],ly[0:nly+1],w[0:nly+1][0:ndelta+1],oldw[0:nly+1][0:ndelta+1])
   for (j = 1; j <= ndelta; j++) {
+    #pragma acc loop
     for (k = 0; k <= nly; k++) {
       new_dw = ((ETA * delta[j] * ly[k]) + (MOMENTUM * oldw[k][j]));
 	  w[k][j] += new_dw;
@@ -328,8 +302,7 @@ float *delta, *ly, **w, **oldw;
 }
 
 
-void bpnn_feedforward(net)
-BPNN *net;
+void bpnn_feedforward(BPNN *net)
 {
   int in, hid, out;
 
@@ -346,9 +319,7 @@ BPNN *net;
 }
 
 
-void bpnn_train(net, eo, eh)
-BPNN *net;
-float *eo, *eh;
+void bpnn_train(BPNN *net, float *eo, float *eh)
 {
   int in, hid, out;
   float out_err, hid_err;
@@ -382,9 +353,7 @@ float *eo, *eh;
 
 
 
-void bpnn_save(net, filename)
-BPNN *net;
-char *filename;
+void bpnn_save(BPNN *net, char *filename)
 {
   int n1, n2, n3, i, j, memcnt;
   float dvalue, **w;
@@ -447,8 +416,7 @@ char *filename;
 }
 
 
-BPNN *bpnn_read(filename)
-char *filename;
+BPNN *bpnn_read(char *filename)
 {
   char *mem;
   BPNN *new;

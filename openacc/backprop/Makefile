@@ -1,6 +1,6 @@
 # C compiler
-CC = gcc
-CC_FLAGS = -g -fopenmp  -O2
+CC = nvc #gcc
+CC_FLAGS = -acc -Minfo=accel -gpu=cc86 -g -fast #-fopenmp  -O2
 
 
 backprop: backprop.o facetrain.o imagenet.o backprop_kernel.o 
