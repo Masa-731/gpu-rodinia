@@ -93,13 +93,20 @@ kernel_cpu_2(	int cores_arg,
 	int bid;
 
 	// process number of querries
-	#pragma omp parallel for private (i, thid)
+#pragma acc data copy(knodes[0:knodes_elem], currKnode[0:count], offset[0:count], lastKnode[0:count], offset_2[0:count], start[0:count], end[0:count], recstart[0:count], reclength[0:count])
+{
+
+#pragma acc kernels
+{
+#pragma acc loop independent gang private(thid, bid, i)
 	for(bid = 0; bid < count; bid++){
 
 		// process levels of the tree
+#pragma acc loop seq
 		for(i = 0; i < maxheight; i++){
 
 			// process all leaves at each level
+#pragma acc loop independent vector private(thid)
 			for(thid = 0; thid < threadsPerBlock; thid++){
 
 				if((knodes[currKnode[bid]].keys[thid] <= start[bid]) && (knodes[currKnode[bid]].keys[thid+1] > start[bid])){
@@ -128,6 +135,7 @@ kernel_cpu_2(	int cores_arg,
 		}
 
 		// process leaves
+#pragma acc loop independent vector
 		for(thid = 0; thid < threadsPerBlock; thid++){
 
 			// Find the index of the starting record
@@ -138,6 +146,7 @@ kernel_cpu_2(	int cores_arg,
 		}
 
 		// process leaves
+#pragma acc loop independent vector
 		for(thid = 0; thid < threadsPerBlock; thid++){
 
 			// Find the index of the ending record
@@ -149,7 +158,11 @@ kernel_cpu_2(	int cores_arg,
 
 	}
 
+}
+
 	time2 = get_time();
+
+}
 
 	//======================================================================================================================================================150
 	//	DISPLAY TIMING

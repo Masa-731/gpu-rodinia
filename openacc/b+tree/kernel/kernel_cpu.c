@@ -88,15 +88,15 @@ kernel_cpu(	int cores_arg,
 
 #pragma acc kernels
 {
-#pragma acc loop independent private(thid, bid, i)
+#pragma acc loop independent gang private(thid, bid, i)
 	for(bid = 0; bid < count; bid++){
 
 		// process levels of the tree
-//#pragma acc loop independent
+#pragma acc loop seq
 		for(i = 0; i < maxheight; i++){
 
 			// process all leaves at each level
-#pragma acc loop independent
+#pragma acc loop independent vector
 			for(thid = 0; thid < threadsPerBlock; thid++){
 
 				// if value is between the two keys
@@ -119,7 +119,7 @@ kernel_cpu(	int cores_arg,
 		//At this point, we have a candidate leaf node which may contain
 		//the target record.  Check each key to hopefully find the record
 		// process all leaves at each level
-#pragma acc loop independent
+#pragma acc loop independent vector
 		for(thid = 0; thid < threadsPerBlock; thid++){
 
 			if(knodes[currKnode[bid]].keys[thid] == keys[bid]){
