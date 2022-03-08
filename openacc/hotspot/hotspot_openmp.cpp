@@ -28,7 +28,6 @@ using namespace std;
 #define K_SI 100
 /* capacitance fitting factor	*/
 #define FACTOR_CHIP	0.5
-#define OPEN
 //#define NUM_THREAD 4
 
 typedef float FLOAT;
@@ -37,10 +36,6 @@ typedef float FLOAT;
 const FLOAT t_chip = 0.0005;
 const FLOAT chip_height = 0.016;
 const FLOAT chip_width = 0.016;
-
-#ifdef OMP_OFFLOAD
-#pragma offload_attribute(push, target(mic))
-#endif
 
 /* ambient temperature, assuming no package at all	*/
 const FLOAT amb_temp = 80.0;
@@ -62,22 +57,19 @@ void single_iteration(FLOAT *result, FLOAT *temp, FLOAT *power, int row, int col
     int chunks_in_row = col/BLOCK_SIZE_C;
     int chunks_in_col = row/BLOCK_SIZE_R;
 
-#ifdef OPEN
-    #ifndef __MIC__
-	omp_set_num_threads(num_omp_threads);
-    #endif
-    #pragma omp parallel for shared(power, temp, result) private(chunk, r, c, delta) firstprivate(row, col, num_chunk, chunks_in_row) schedule(static)
-#endif
+#pragma acc parallel loop present(result[0:row*col], temp[0:row*col], power[0:row*col]) gang
     for ( chunk = 0; chunk < num_chunk; ++chunk )
     {
         int r_start = BLOCK_SIZE_R*(chunk/chunks_in_col);
-        int c_start = BLOCK_SIZE_C*(chunk%chunks_in_row); 
+        int c_start = BLOCK_SIZE_C*(chunk%chunks_in_row);
         int r_end = r_start + BLOCK_SIZE_R > row ? row : r_start + BLOCK_SIZE_R;
         int c_end = c_start + BLOCK_SIZE_C > col ? col : c_start + BLOCK_SIZE_C;
-       
+
         if ( r_start == 0 || c_start == 0 || r_end == row || c_end == col )
         {
+#pragma acc loop
             for ( r = r_start; r < r_start + BLOCK_SIZE_R; ++r ) {
+#pragma acc loop
                 for ( c = c_start; c < c_start + BLOCK_SIZE_C; ++c ) {
                     /* Corner 1 */
                     if ( (r == 0) && (c == 0) ) {
@@ -134,8 +126,8 @@ void single_iteration(FLOAT *result, FLOAT *temp, FLOAT *power, int row, int col
             continue;
         }
 
+#pragma acc loop collapse(2) vector
         for ( r = r_start; r < r_start + BLOCK_SIZE_R; ++r ) {
-#pragma omp simd        
             for ( c = c_start; c < c_start + BLOCK_SIZE_C; ++c ) {
             /* Update Temperatures */
                 result[r*col+c] =temp[r*col+c]+ 
@@ -148,9 +140,6 @@ void single_iteration(FLOAT *result, FLOAT *temp, FLOAT *power, int row, int col
     }
 }
 
-#ifdef OMP_OFFLOAD
-#pragma offload_attribute(pop)
-#endif
 
 /* Transient solver driver routine: simply converts the heat 
  * transfer differential equations to difference equations 
@@ -182,13 +171,11 @@ void compute_tran_temp(FLOAT *result, int num_iterations, FLOAT *temp, FLOAT *po
 	fprintf(stdout, "Rx: %g\tRy: %g\tRz: %g\tCap: %g\n", Rx, Ry, Rz, Cap);
 	#endif
 
-#ifdef OMP_OFFLOAD
-        int array_size = row*col;
-#pragma omp target \
-        map(temp[0:array_size]) \
-        map(to: power[0:array_size], row, col, Cap_1, Rx_1, Ry_1, Rz_1, step, num_iterations) \
-        map( result[0:array_size])
-#endif
+    int array_size = row*col;
+#pragma acc data \
+        copy(temp[0:array_size]) \
+        copyin(power[0:array_size], row, col, Cap_1, Rx_1, Ry_1, Rz_1, step, num_iterations) \
+        create(result[0:array_size])
         {
             FLOAT* r = result;
             FLOAT* t = temp;
@@ -201,7 +188,7 @@ void compute_tran_temp(FLOAT *result, int num_iterations, FLOAT *temp, FLOAT *po
                 FLOAT* tmp = t;
                 t = r;
                 r = tmp;
-            }	
+            }
         }
 	#ifdef VERBOSE
 	fprintf(stdout, "iteration %d\n", i++);
