@@ -7,7 +7,6 @@ Fixed some compile errors on current environment (gcc 11.0, clang 14.0, nvcc 11.
 I have confirmed all of the benchmarks for CUDA and OpenMP can be compiled to generate executable binaries, ~~but haven't done actually running them and validating results, thus runtime errors could still occur.~~
 (Feb. 2022) I have confirmed all benchmarks except for `mummergpu` successfully run on my system.
 Also, as I haven't touched the OpenCL versions at all, compiles for OpenCL are excluded from `make all`.
-
 As of Mar. 2022, I'm working on porting some of the benchmarks for OpenACC.
 
 2) By yuhc (https://github.com/yuhc/gpu-rodinia):
