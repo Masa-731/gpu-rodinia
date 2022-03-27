@@ -36,7 +36,6 @@
 /*ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE             */
 /*POSSIBILITY OF SUCH DAMAGE.                                                 */
 /******************************************************************************/
-
 /*************************************************************************/
 /**   File:         example.c                                           **/
 /**   Description:  Takes as input a file:                              **/
@@ -82,17 +81,14 @@
 
 extern double wtime(void);
 
-int num_omp_threads = 1;
-
 /*---< usage() >------------------------------------------------------------*/
 void usage(char *argv0) {
     char *help =
         "Usage: %s [switches] -i filename\n"
-        "       -i filename     		: file containing data to be clustered\n"
-        "       -b                 	: input file is in binary format\n"
-		"       -k                 	: number of clusters (default is 5) \n"
-        "       -t threshold		: threshold value\n"
-		"       -n no. of threads	: number of threads";
+        "       -i filename     :  file containing data to be clustered\n"
+        "       -b                 :input file is in binary format\n"
+		"       -k                 : number of clusters (default is 8) \n"
+        "       -t threshold    : threshold value\n";
     fprintf(stderr, help, argv0);
     exit(-1);
 }
@@ -107,18 +103,20 @@ int main(int argc, char **argv) {
            float  *buf;
            float **attributes;
            float **cluster_centres=NULL;
-           int     i, j;
-                
+           int     i, j;           
+		   
            int     numAttributes;
-           int     numObjects;        
-           char    line[1024];           
+           int     numObjects;           
+           char    line[1024];
            int     isBinaryFile = 0;
-           int     nloops = 1;
+           int     nloops;
            float   threshold = 0.001;
-		   double  timing;		   
+		   double  timing;
 
-	while ( (opt=getopt(argc,argv,"i:k:t:b:n:?"))!= EOF) {
-		switch (opt) {
+
+
+	while ( (opt=getopt(argc,argv,"i:k:t:b"))!= EOF) {
+        switch (opt) {
             case 'i': filename=optarg;
                       break;
             case 'b': isBinaryFile = 1;
@@ -126,16 +124,13 @@ int main(int argc, char **argv) {
             case 't': threshold=atof(optarg);
                       break;
             case 'k': nclusters = atoi(optarg);
-                      break;			
-			case 'n': num_omp_threads = atoi(optarg);
-					  break;
+                      break;
             case '?': usage(argv[0]);
                       break;
             default: usage(argv[0]);
                       break;
         }
     }
-
 
     if (filename == 0) usage(argv[0]);
 
@@ -199,40 +194,41 @@ int main(int argc, char **argv) {
             }
         }
         fclose(infile);
-    }     
-	printf("I/O completed\n");	
+    }
+  
+    nloops = 1;	
+	printf("I/O completed\n");
 
 	memcpy(attributes[0], buf, numObjects*numAttributes*sizeof(float));
 
 	timing = omp_get_wtime();
     for (i=0; i<nloops; i++) {
-        
+        		
         cluster_centres = NULL;
         cluster(numObjects,
                 numAttributes,
-                attributes,           /* [numObjects][numAttributes] */                
+                attributes,           /* [numObjects][numAttributes] */
                 nclusters,
                 threshold,
                 &cluster_centres   
                );
+
      
     }
     timing = omp_get_wtime() - timing;
-	
 
 	printf("number of Clusters %d\n",nclusters); 
 	printf("number of Attributes %d\n\n",numAttributes); 
-  /*  	printf("Cluster Centers Output\n"); 
+    printf("Cluster Centers Output\n"); 
 	printf("The first number is cluster number and the following data is arribute value\n");
 	printf("=============================================================================\n\n");
 	
-    for (i=0; i< nclusters; i++) {
+    for (i=0; i<nclusters; i++) {
 		printf("%d: ", i);
         for (j=0; j<numAttributes; j++)
-            printf("%.2f ", cluster_centres[i][j]);
+            printf("%f ", cluster_centres[i][j]);
         printf("\n\n");
     }
-*/
 	printf("Time for process: %f\n", timing);
 
     free(attributes);

@@ -1,6 +1,6 @@
 # C compiler
 CC = nvc #gcc
-CC_FLAGS = -acc -Minfo=accel -fast -g #-fopenmp -O2 
+CC_FLAGS = -acc -Minfo=accel -gpu=cc86,managed  -g #-fopenmp -O2 
 
 kmeans: cluster.o getopt.o kmeans.o kmeans_clustering.o 
 	$(CC) $(CC_FLAGS) cluster.o getopt.o kmeans.o kmeans_clustering.o  -o kmeans

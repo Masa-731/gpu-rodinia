@@ -36,8 +36,8 @@
 /*ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE             */
 /*POSSIBILITY OF SUCH DAMAGE.                                                 */
 /******************************************************************************/
-#ifndef _H_FUZZY_KMEANS
-#define _H_FUZZY_KMEANS
+#ifndef _H_KMEANS
+#define _H_KMEANS
 
 #ifndef FLT_MAX
 #define FLT_MAX 3.40282347e+38
