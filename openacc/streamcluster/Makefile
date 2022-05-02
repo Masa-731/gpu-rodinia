@@ -1,24 +1,11 @@
-PREFIX=${PARSECDIR}/pkgs/kernels/streamcluster/inst/${PARSECPLAT}
+TARGET_G = sc_gpu
 
-TARGET_C = sc_cpu
+all: gpu 
 
-TARGET_O = sc_omp
-
-ifdef version
-  ifeq "$(version)" "parallel"
-    CXXFLAGS :=	$(CXXFLAGS) -DENABLE_THREADS -pthread
-  endif
-endif
-
-all: cpu omp
-
-cpu:
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) streamcluster_original.cpp -o $(TARGET_C) $(LIBS) -DENABLE_THREADS -pthread
-
-omp:
-	g++ -O3 -fopenmp -o $(TARGET_O) streamcluster_omp.cpp
-
+gpu:
+	nvc -acc -gpu=cc86 -Minfo=accel -std=c99 -fast -o $(TARGET_G) streamcluster.c -lm
+	#gcc -std=c99 -O3 -o $(TARGET_G) streamcluster.c -lm
 
 clean:
-	rm -f *.o *~ *.txt sc_cpu sc_omp
+	rm -f *.o *~ *.txt sc_gpu *.hmf* *.log *.out
 	

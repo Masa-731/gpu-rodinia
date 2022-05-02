@@ -74,7 +74,6 @@
 #include <math.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <omp.h>
 #include "getopt.h"
 
 #include "kmeans.h"
@@ -84,11 +83,15 @@ extern double wtime(void);
 /*---< usage() >------------------------------------------------------------*/
 void usage(char *argv0) {
     char *help =
-        "Usage: %s [switches] -i filename\n"
-        "       -i filename     :  file containing data to be clustered\n"
-        "       -b                 :input file is in binary format\n"
-		"       -k                 : number of clusters (default is 8) \n"
-        "       -t threshold    : threshold value\n";
+        "\nUsage: %s [switches] -i filename\n\n"
+        "    -i filename      :file containing data to be clustered\n"      
+        "    -m max_nclusters :maximum number of clusters allowed    [default=5]\n"
+        "    -n min_nclusters :minimum number of clusters allowed    [default=5]\n"
+        "    -t threshold     :threshold value                       [default=0.001]\n"
+        "    -l nloops        :iteration for each number of clusters [default=1]\n"
+        "    -b               :input file is in binary format\n"
+        "    -r               :calculate RMSE                        [default=off]\n"
+        "    -o               :output cluster center coordinates     [default=off]\n";
     fprintf(stderr, help, argv0);
     exit(-1);
 }
@@ -98,24 +101,31 @@ int main(int argc, char **argv) {
            int     opt;
     extern char   *optarg;
     extern int     optind;
-           int     nclusters=5;
            char   *filename = 0;           
            float  *buf;
-           float **attributes;
-           float **cluster_centres=NULL;
-           int     i, j;           
-		   
-           int     numAttributes;
-           int     numObjects;           
            char    line[1024];
            int     isBinaryFile = 0;
-           int     nloops;
+
+           int     i, j, index;           
+		   
+           int     nloops = 1;
            float   threshold = 0.001;
+           int     max_nclusters = 5;
+           int     min_nclusters = 5;
+           int     best_nclusters = 0;
+           float **features;
+           float **cluster_centres=NULL;
+           int     nfeatures = 0;
+           int     npoints = 0;
+           
+           float   len;
 		   double  timing;
 
+           int     isRMSE = 0;     
+           float   rmse;
+           int     isOutput = 0;
 
-
-	while ( (opt=getopt(argc,argv,"i:k:t:b"))!= EOF) {
+	while ( (opt=getopt(argc,argv,"i:t:m:n:l:bro"))!= EOF) {
         switch (opt) {
             case 'i': filename=optarg;
                       break;
@@ -123,7 +133,15 @@ int main(int argc, char **argv) {
                       break;
             case 't': threshold=atof(optarg);
                       break;
-            case 'k': nclusters = atoi(optarg);
+            case 'm': max_nclusters = atoi(optarg);
+                      break;
+            case 'n': min_nclusters = atoi(optarg);
+                      break;
+            case 'r': isRMSE = 1;
+                      break;
+            case 'o': isOutput = 1;
+                      break;
+            case 'l': nloops = atoi(optarg);
                       break;
             case '?': usage(argv[0]);
                       break;
@@ -134,8 +152,6 @@ int main(int argc, char **argv) {
 
     if (filename == 0) usage(argv[0]);
 
-    numAttributes = numObjects = 0;
-
     /* from the input file, get the numAttributes and numObjects ------------*/
    
     if (isBinaryFile) {
@@ -144,18 +160,18 @@ int main(int argc, char **argv) {
             fprintf(stderr, "Error: no such file (%s)\n", filename);
             exit(1);
         }
-        read(infile, &numObjects,    sizeof(int));
-        read(infile, &numAttributes, sizeof(int));
+        read(infile, &npoints,    sizeof(int));
+        read(infile, &nfeatures, sizeof(int));
    
 
         /* allocate space for attributes[] and read attributes of all objects */
-        buf           = (float*) malloc(numObjects*numAttributes*sizeof(float));
-        attributes    = (float**)malloc(numObjects*             sizeof(float*));
-        attributes[0] = (float*) malloc(numObjects*numAttributes*sizeof(float));
-        for (i=1; i<numObjects; i++)
-            attributes[i] = attributes[i-1] + numAttributes;
+        buf           = (float*) malloc(npoints*nfeatures*sizeof(float));
+        features    = (float**)malloc(npoints*sizeof(float*));
+        features[0] = (float*) malloc(npoints*nfeatures*sizeof(float));
+        for (i=1; i<npoints; i++)
+            features[i] = features[i-1] + nfeatures;
 
-        read(infile, buf, numObjects*numAttributes*sizeof(float));
+        read(infile, buf, npoints*nfeatures*sizeof(float));
 
         close(infile);
     }
@@ -167,28 +183,28 @@ int main(int argc, char **argv) {
         }
         while (fgets(line, 1024, infile) != NULL)
             if (strtok(line, " \t\n") != 0)
-                numObjects++;
+                npoints++;
         rewind(infile);
         while (fgets(line, 1024, infile) != NULL) {
             if (strtok(line, " \t\n") != 0) {
                 /* ignore the id (first attribute): numAttributes = 1; */
-                while (strtok(NULL, " ,\t\n") != NULL) numAttributes++;
+                while (strtok(NULL, " ,\t\n") != NULL) nfeatures++;
                 break;
             }
         }
      
 
         /* allocate space for attributes[] and read attributes of all objects */
-        buf           = (float*) malloc(numObjects*numAttributes*sizeof(float));
-        attributes    = (float**)malloc(numObjects*             sizeof(float*));
-        attributes[0] = (float*) malloc(numObjects*numAttributes*sizeof(float));
-        for (i=1; i<numObjects; i++)
-            attributes[i] = attributes[i-1] + numAttributes;
+        buf           = (float*) malloc(npoints*nfeatures*sizeof(float));
+        features    = (float**)malloc(npoints*sizeof(float*));
+        features[0] = (float*) malloc(npoints*nfeatures*sizeof(float));
+        for (i=1; i<npoints; i++)
+            features[i] = features[i-1] + nfeatures;
         rewind(infile);
         i = 0;
         while (fgets(line, 1024, infile) != NULL) {
             if (strtok(line, " \t\n") == NULL) continue; 
-            for (j=0; j<numAttributes; j++) {
+            for (j=0; j<nfeatures; j++) {
                 buf[i] = atof(strtok(NULL, " ,\t\n"));
                 i++;
             }
@@ -196,30 +212,46 @@ int main(int argc, char **argv) {
         fclose(infile);
     }
   
-    nloops = 1;	
 	printf("I/O completed\n");
+    printf("\nNumber of objects: %d\n", npoints);
+    printf("Number of features: %d\n", nfeatures);
 
-	memcpy(attributes[0], buf, numObjects*numAttributes*sizeof(float));
+	
 
-	timing = omp_get_wtime();
-    for (i=0; i<nloops; i++) {
-        		
-        cluster_centres = NULL;
-        cluster(numObjects,
-                numAttributes,
-                attributes,           /* [numObjects][numAttributes] */
-                nclusters,
-                threshold,
-                &cluster_centres   
-               );
-
-     
+    // error check for clusters
+    if (npoints < min_nclusters)
+    {
+        printf("Error: min_nclusters(%d) > npoints(%d) -- cannot proceed\n", min_nclusters, npoints);
+        exit(0);
     }
-    timing = omp_get_wtime() - timing;
 
-	printf("number of Clusters %d\n",nclusters); 
-	printf("number of Attributes %d\n\n",numAttributes); 
-    printf("Cluster Centers Output\n"); 
+    srand(7);
+    memcpy(features[0], buf, npoints*nfeatures*sizeof(float));
+    free(buf);
+   
+    timing = wtime();
+   
+    cluster_centres = NULL;
+    index = cluster(npoints,               /* number of data points */
+                    nfeatures,              /* number of features for each point */
+                    features,               /* array: [npoints][nfeatures] */
+                    min_nclusters,          /* range of min to max number of clusters */
+                    max_nclusters,
+                    threshold,              /* loop termination factor */
+                   &best_nclusters,         /* return: number between min and max */
+                   &cluster_centres,        /* return: [best_nclusters][nfeatures] */  
+                   &rmse,                   /* Root Mean Squared Error */
+                    isRMSE,                 /* calculate RMSE */
+                    nloops);                /* number of iteration for each number of clusters */  
+   
+
+    timing = wtime() - timing;
+    //timing = omp_get_wtime() - timing;
+
+    printf("Time for Cluster(): %f\n", timing);
+	//printf("number of Clusters %d\n",nclusters); 
+	//printf("number of Attributes %d\n\n",numAttributes); 
+    /*printf("Cluster Centers Output\n"); 
 	printf("The first number is cluster number and the following data is arribute value\n");
 	printf("=============================================================================\n\n");
 	
@@ -228,13 +260,55 @@ int main(int argc, char **argv) {
         for (j=0; j<numAttributes; j++)
             printf("%f ", cluster_centres[i][j]);
         printf("\n\n");
-    }
-	printf("Time for process: %f\n", timing);
+    }*/
+	//printf("Time for process: %f\n", timing);
 
-    free(attributes);
+    if((min_nclusters == max_nclusters) && (isOutput == 1)) {
+        printf("\n================= Centroid Coordinates =================\n");
+        for(i = 0; i < max_nclusters; i++){
+            printf("%d:", i);
+            for(j = 0; j < nfeatures; j++){
+                printf(" %.2f", cluster_centres[i][j]);
+            }
+            printf("\n\n");
+        }
+    }
+    
+    len = (float) ((max_nclusters - min_nclusters + 1)*nloops);
+
+    printf("Number of Iteration: %d\n", nloops);
+    //printf("Time for I/O: %.5fsec\n", io_timing);
+    //printf("Time for Entire Clustering: %.5fsec\n", cluster_timing);
+    
+    if(min_nclusters != max_nclusters){
+        if(nloops != 1){                                    //range of k, multiple iteration
+            //printf("Average Clustering Time: %fsec\n",
+            //      cluster_timing / len);
+            printf("Best number of clusters is %d\n", best_nclusters);              
+        }
+        else{                                               //range of k, single iteration
+            //printf("Average Clustering Time: %fsec\n",
+            //      cluster_timing / len);
+            printf("Best number of clusters is %d\n", best_nclusters);              
+        }
+    }
+    else{
+        if(nloops != 1){                                    // single k, multiple iteration
+            //printf("Average Clustering Time: %.5fsec\n",
+            //      cluster_timing / nloops);
+            if(isRMSE)                                      // if calculated RMSE
+                printf("Number of trials to approach the best RMSE of %.3f is %d\n", rmse, index + 1);
+        }
+        else{                                               // single k, single iteration               
+            if(isRMSE)                                      // if calculated RMSE
+                printf("Root Mean Squared Error: %.3f\n", rmse);
+        }
+    }
+
+    free(features[0]);
+    free(features);
     free(cluster_centres[0]);
     free(cluster_centres);
-    free(buf);
+    
     return(0);
 }
-

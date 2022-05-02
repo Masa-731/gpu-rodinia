@@ -1,8 +1,8 @@
-all: OpenMP/leukocyte
+all: openacc/leukocyte
 
-OpenMP/leukocyte:
-	cd OpenMP; make
+openacc/leukocyte:
+	cd openacc; make
 
 clean:
-	cd OpenMP; make clean
+	cd openacc; make clean
 	rm -f meschach_lib/meschach.a

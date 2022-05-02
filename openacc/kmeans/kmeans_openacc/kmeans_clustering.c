@@ -74,7 +74,6 @@
 
 extern double wtime(void);
 
-#pragma acc routine seq
 int find_nearest_point(float  *pt,          /* [nfeatures] */
                        int     nfeatures,
                        float **pts,         /* [npts][nfeatures] */
@@ -84,7 +83,6 @@ int find_nearest_point(float  *pt,          /* [nfeatures] */
     float min_dist=FLT_MAX;
 
     /* find the cluster center id with min distance to pt */
-#pragma acc loop independent
     for (i=0; i<npts; i++) {
         float dist;
         dist = euclid_dist_2(pt, pts[i], nfeatures);  /* no need square root */
@@ -98,7 +96,6 @@ int find_nearest_point(float  *pt,          /* [nfeatures] */
 
 /*----< euclid_dist_2() >----------------------------------------------------*/
 /* multi-dimensional spatial Euclid distance square */
-#pragma acc routine seq
 __inline
 float euclid_dist_2(float *pt1,
                     float *pt2,
@@ -107,29 +104,69 @@ float euclid_dist_2(float *pt1,
     int i;
     float ans=0.0;
 
-#pragma acc loop independent reduction(+:ans)
     for (i=0; i<numdims; i++)
         ans += (pt1[i]-pt2[i]) * (pt1[i]-pt2[i]);
 
     return(ans);
 }
 
+/*----< rms_err(): calculates RMSE of clustering >-------------------------------------*/
+float rms_err   (float **feature,         /* [npoints][nfeatures] */
+                 int     nfeatures,
+                 int     npoints,
+                 float **cluster_centres, /* [nclusters][nfeatures] */
+                 int     nclusters)
+{
+    int    i;
+    int    nearest_cluster_index;   /* cluster center id with min distance to pt */
+    float  sum_euclid = 0.0;        /* sum of Euclidean distance squares */
+    float  ret;                     /* return value */
+    
+    /* calculate and sum the sqaure of euclidean distance*/ 
+    /*
+    #pragma omp parallel for \
+                shared(feature,cluster_centres) \
+                firstprivate(npoints,nfeatures,nclusters) \
+                private(i, nearest_cluster_index) \
+                schedule (static)   
+    */
+    for (i=0; i<npoints; i++) {
+        nearest_cluster_index = find_nearest_point(feature[i], 
+                                                    nfeatures, 
+                                                    cluster_centres, 
+                                                    nclusters);
+
+        sum_euclid += euclid_dist_2(feature[i],
+                                    cluster_centres[nearest_cluster_index],
+                                    nfeatures);
+        
+    }   
+    /* divide by n, then take sqrt */
+    ret = sqrt(sum_euclid / npoints);
+
+    return(ret);
+}
 
 /*----< kmeans_clustering() >---------------------------------------------*/
 float** kmeans_clustering(float **feature,    /* in: [npoints][nfeatures] */
+                            float *feature_d,
                           int     nfeatures,
                           int     npoints,
                           int     nclusters,
                           float   threshold,
-                          int    *membership) /* out: [npoints] */
+                          int    *membership, /* out: [npoints] */
+                          int    *membership_tmp
+                          ) 
 {
 
-    int      i, j, n=0, index, loop=0;
+    int      i, j, k, n=0, index, loop=0, temp;
     int     *new_centers_len; /* [nclusters]: no. of points in each cluster */
     float    delta;
     float  **clusters;   /* out: [nclusters][nfeatures] */
     float  **new_centers;     /* [nclusters][nfeatures] */
-  
+    int *initial;
+    int initial_points;
+    int c = 0;
 
     /* allocate space for returning variable clusters[] */
     clusters    = (float**) malloc(nclusters *             sizeof(float*));
@@ -137,14 +174,29 @@ float** kmeans_clustering(float **feature,    /* in: [npoints][nfeatures] */
     for (i=1; i<nclusters; i++)
         clusters[i] = clusters[i-1] + nfeatures;
 
-    /* randomly pick cluster centers */
-    for (i=0; i<nclusters; i++) {
-        //n = (int)rand() % npoints;
-        for (j=0; j<nfeatures; j++)
-            clusters[i][j] = feature[n][j];
-		n++;
-    }
 
+    initial = (int *) malloc(npoints * sizeof(int));
+    for (i = 0; i < npoints; i++) 
+    {
+        initial[i] = i;
+    }
+    initial_points = npoints;
+
+    /* randomly pick cluster centers */
+    for (i=0; i<nclusters && initial_points >= 0; i++) {
+        //n = (int)rand() % initial_points;     
+        
+        for (j=0; j<nfeatures; j++)
+            clusters[i][j] = feature[initial[n]][j];    // remapped
+
+      
+        temp = initial[n];
+        initial[n] = initial[initial_points-1];
+        initial[initial_points-1] = temp;
+        initial_points--;
+        n++;
+    }
+   
     for (i=0; i<npoints; i++)
 		membership[i] = -1;
 
@@ -155,55 +207,98 @@ float** kmeans_clustering(float **feature,    /* in: [npoints][nfeatures] */
     new_centers[0] = (float*)  calloc(nclusters * nfeatures, sizeof(float));
     for (i=1; i<nclusters; i++)
         new_centers[i] = new_centers[i-1] + nfeatures;
+ 
 
+    float *clusters_d;//, *feature_d;
+    clusters_d = (float *)malloc(nclusters * nfeatures * sizeof(float));
+    //feature_d = (float *)malloc(npoints * nfeatures * sizeof(float));
+    
+    /*
+    for (i = 0; i< npoints; i++) {
+        for (j = 0; j < nfeatures; j++)
+            feature_d[j * npoints + i] = feature[i][j];
+    }
+    */
 
-//#pragma acc enter data copyin(membership[0:npoints], feature[0:npoints][0:nfeatures], new_centers[0:nclusters][0:nfeatures], new_centers_len[0:nclusters], clusters[0:nclusters][0:nfeatures], delta)
-
+#pragma acc data copyin(feature_d[0:npoints * nfeatures])
+{
     do {
-
+		
         delta = 0.0;
-//#pragma acc update device(delta)
-#pragma acc kernels loop seq//present(membership[0:npoints], feature[0:npoints][0:nfeatures], new_centers[0:nclusters][0:nfeatures], new_centers_len[0:nclusters], clusters[0:nclusters][0:nfeatures], delta) reduction(+:delta)
-        for (i=0; i<npoints; i++) {
-	        /* find the index of nestest cluster centers */
-	        index = find_nearest_point(feature[i], nfeatures, clusters, nclusters);
-	        /* if membership changes, increase delta by 1 */
-	        if (membership[i] != index) delta += 1.0;
 
-	        /* assign the membership to object i */
-	        membership[i] = index;
-
-	        /* update new cluster centers : sum of objects located within */
-//#pragma acc atomic update
-	        new_centers_len[index]++;
-
-#pragma acc loop seq
-	        for (j=0; j<nfeatures; j++)
-				new_centers[index][j] += feature[i][j];
+        for (i = 0; i< nclusters; i++) {
+            for (j = 0; j< nfeatures; j++)
+                clusters_d[i * nfeatures + j] = clusters[i][j];
         }
 
-//#pragma acc update host(new_centers[0:nclusters][0:nfeatures], new_centers_len[0:nclusters], delta)
+#pragma acc kernels copy(membership_tmp[0:npoints]), copyin(clusters_d[0:nclusters * nfeatures])
+{
+#pragma acc loop independent, private(j, k, index) 
+        for (i = 0; i < npoints; i++) {
+
+            float min_dist = FLT_MAX;
+            float dist = 0.0;
+            
+            for (j = 0; j < nclusters; j++) {
+                
+                float ans = 0.0;
+
+                for (k = 0; k < nfeatures; k++) {
+                   ans += (feature_d[k * npoints + i] - clusters_d[j * nfeatures + k]) *
+                            (feature_d[k * npoints + i] - clusters_d[j * nfeatures + k]);
+                }
+                
+                dist = ans;
+
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    index    = j;
+                }
+            }
+
+	        membership_tmp[i] = index;
+        }
+}
+        
+        for (i = 0; i < npoints; i++)
+        {
+            int cluster_id = membership_tmp[i];
+            new_centers_len[cluster_id]++;
+            if (membership_tmp[i] != membership[i])
+            {
+                delta++;
+                membership[i] = membership_tmp[i];
+            }
+
+            for (j = 0; j < nfeatures; j++)
+            {
+                new_centers[cluster_id][j] += feature[i][j];
+            }
+        }
+
+        
 
 	/* replace old cluster centers with new_centers */
-        for (i=0; i<nclusters; i++) {
-            for (j=0; j<nfeatures; j++) {
+        for (i = 0; i < nclusters; i++) {
+            for (j = 0; j < nfeatures; j++) {
                 if (new_centers_len[i] > 0)
 					clusters[i][j] = new_centers[i][j] / new_centers_len[i];
 				new_centers[i][j] = 0.0;   /* set back to 0 */
 			}
 			new_centers_len[i] = 0;   /* set back to 0 */
 		}
+        
+        c++;
         //delta /= npoints;
-        loop++;
-//#pragma acc update device(clusters[0:nclusters][0:nfeatures], new_centers[0:nclusters][0:nfeatures], new_centers_len[0:nclusters])
-    } while (delta > threshold  && loop++ < 500 );
-
-//#pragma acc exit data copyout(clusters[0:nclusters][0:nfeatures])
-
+    } while ((delta > threshold) && (loop++ < 500));
+}
+    free(clusters_d);
+    //free(feature_d);
+    printf("iterated %d times\n", c);
+  
     free(new_centers[0]);
     free(new_centers);
     free(new_centers_len);
 
     return clusters;
 }
-

@@ -188,4 +188,3 @@ extern int _getopt_internal ();
 #undef __need_getopt
 
 #endif /* getopt.h */
-
