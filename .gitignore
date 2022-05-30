@@ -12,3 +12,5 @@ bin
 *.txt
 .vscode
 *.ii
+openmp/streamcluster/sc_cpu
+openmp/streamcluster/sc_omp
