@@ -10,9 +10,9 @@ ifdef OUTPUT
 override OUTPUT = -DOUTPUT
 endif
 
-C_C = gcc
+C_C = nvc -acc -Minfo=accel -gpu=cc86 -g
 OMP_LIB = -lgomp
-OMP_FLAG = -fopenmp
+OMP_FLAG = -mp
 
 # link objects (binaries) together
 a.out:		main.o \
@@ -24,7 +24,6 @@ a.out:		main.o \
 			./util/num/num.o \
 			./util/timer/timer.o \
 			-lm \
-			$(OMP_LIB) \
 			-o lavaMD
 # compile function files into objects (binaries)
 main.o:		main.h \
