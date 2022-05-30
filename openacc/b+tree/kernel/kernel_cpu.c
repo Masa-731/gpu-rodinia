@@ -81,10 +81,10 @@ kernel_cpu(	int cores_arg,
 	int bid;
 	int i;
 
+	time1 = get_time();
 	// process number of querries
 #pragma acc data copy(records[0:records_elem], knodes[0:knodes_elem], currKnode[0:count], offset[0:count], keys[0:count], ans[0:count])
 {
-	time1 = get_time();
 
 #pragma acc kernels
 {
@@ -132,9 +132,9 @@ kernel_cpu(	int cores_arg,
 
 }
 
-	time2 = get_time();
 
 }
+	time2 = get_time();
 
 	//======================================================================================================================================================150
 	//	DISPLAY TIMING
