@@ -1,27 +1,32 @@
 /**
- * @file ex_particle_OPENMP_seq.c
+ * @file ex_particle_OPENACC_seq.c
  * @author Michael Trotter & Matt Goodrum
- * @brief Particle filter implementation in C/OpenMP 
+ * @author Pisit Makpaisit (port to OpenACC)
+ * @brief Particle filter implementation in C/OpenACC
  */
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <sys/time.h>
-#include <omp.h>
 #include <limits.h>
-#define PI 3.1415926535897932
+#include <string.h>
+#include <time.h>
+#define PI acos(-1)
 /**
 @var M value for Linear Congruential Generator (LCG); use GCC's value
 */
-long M = INT_MAX;
+// long M = INT_MAX;
+#define M INT_MAX
 /**
 @var A value for LCG
 */
-int A = 1103515245;
+// int A = 1103515245;
+#define A 1103515245
 /**
 @var C value for LCG
 */
-int C = 12345;
+// int C = 12345;
+#define C 12345
 /*****************************
 *GET_TIME
 *returns a long int representing the time
@@ -330,8 +335,8 @@ int findIndexBin(double * CDF, int beginIndex, int endIndex, double value){
 	return findIndexBin(CDF, middleIndex-1, endIndex, value);
 }
 /**
-* The implementation of the particle filter using OpenMP for many frames
-* @see http://openmp.org/wp/
+* The implementation of the particle filter using OpenACC for many frames
+* @see http://www.openacc-standard.org/
 * @note This function is designed to work with a video of several frames. In addition, it references a provided MATLAB function which takes the video, the objxy matrix and the x and y arrays as arguments and returns the likelihoods
 * @param I The video to be run
 * @param IszX The x dimension of the video
@@ -368,7 +373,8 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 	printf("TIME TO GET NEIGHBORS TOOK: %f\n", elapsed_time(start, get_neighbors));
 	//initial weights are all equal (1/Nparticles)
 	double * weights = (double *)malloc(sizeof(double)*Nparticles);
-	#pragma omp parallel for shared(weights, Nparticles) private(x)
+	#pragma acc enter data create(weights[0:Nparticles])
+	#pragma acc parallel loop
 	for(x = 0; x < Nparticles; x++){
 		weights[x] = 1/((double)(Nparticles));
 	}
@@ -383,7 +389,7 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 	double * CDF = (double *)malloc(sizeof(double)*Nparticles);
 	double * u = (double *)malloc(sizeof(double)*Nparticles);
 	int * ind = (int*)malloc(sizeof(int)*countOnes*Nparticles);
-	#pragma omp parallel for shared(arrayX, arrayY, xe, ye) private(x)
+	#pragma acc parallel loop create(arrayX[0:Nparticles], arrayY[0:Nparticles])
 	for(x = 0; x < Nparticles; x++){
 		arrayX[x] = xe;
 		arrayY[x] = ye;
@@ -392,12 +398,18 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 	
 	printf("TIME TO SET ARRAYS TOOK: %f\n", elapsed_time(get_weights, get_time()));
 	int indX, indY;
+
+	#pragma acc data copy(I[0:IszX*IszY*Nfr]) copyin(seed[0:Nparticles]) \
+		create(ind[0:countOnes*Nparticles], likelihood[0:Nparticles], CDF[0:Nparticles]) \
+		create(u[0:Nparticles], xj[0:Nparticles], yj[0:Nparticles]) \
+		present(weights[0:Nparticles])
+	{
 	for(k = 1; k < Nfr; k++){
 		long long set_arrays = get_time();
 		//apply motion model
 		//draws sample from motion model (random walk). The only prior information
 		//is that the object moves 2x as fast as in the y direction
-		#pragma omp parallel for shared(arrayX, arrayY, Nparticles, seed) private(x)
+		#pragma acc parallel loop
 		for(x = 0; x < Nparticles; x++){
 			arrayX[x] += 1 + 5*randn(seed, x);
 			arrayY[x] += -2 + 2*randn(seed, x);
@@ -405,7 +417,7 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 		long long error = get_time();
 		printf("TIME TO SET ERROR TOOK: %f\n", elapsed_time(set_arrays, error));
 		//particle filter likelihood
-		#pragma omp parallel for shared(likelihood, I, arrayX, arrayY, objxy, ind) private(x, y, indX, indY)
+		#pragma acc parallel loop
 		for(x = 0; x < Nparticles; x++){
 			//compute the likelihood: remember our assumption is that you know
 			// foreground and the background image intensity distribution.
@@ -428,20 +440,20 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 		printf("TIME TO GET LIKELIHOODS TOOK: %f\n", elapsed_time(error, likelihood_time));
 		// update & normalize weights
 		// using equation (63) of Arulampalam Tutorial
-		#pragma omp parallel for shared(Nparticles, weights, likelihood) private(x)
+		#pragma acc parallel loop
 		for(x = 0; x < Nparticles; x++){
 			weights[x] = weights[x] * exp(likelihood[x]);
 		}
 		long long exponential = get_time();
 		printf("TIME TO GET EXP TOOK: %f\n", elapsed_time(likelihood_time, exponential));
 		double sumWeights = 0;
-		#pragma omp parallel for private(x) reduction(+:sumWeights)
+		#pragma acc parallel loop vector reduction(+:sumWeights)
 		for(x = 0; x < Nparticles; x++){
 			sumWeights += weights[x];
 		}
 		long long sum_time = get_time();
 		printf("TIME TO SUM WEIGHTS TOOK: %f\n", elapsed_time(exponential, sum_time));
-		#pragma omp parallel for shared(sumWeights, weights) private(x)
+		#pragma acc parallel loop
 		for(x = 0; x < Nparticles; x++){
 			weights[x] = weights[x]/sumWeights;
 		}
@@ -450,7 +462,7 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 		xe = 0;
 		ye = 0;
 		// estimate the object location by expected values
-		#pragma omp parallel for private(x) reduction(+:xe, ye)
+		#pragma acc parallel loop vector reduction(+:xe, ye)
 		for(x = 0; x < Nparticles; x++){
 			xe += arrayX[x] * weights[x];
 			ye += arrayY[x] * weights[x];
@@ -466,16 +478,15 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 		//pause(hold off for now)
 		
 		//resampling
-		
-		
-		CDF[0] = weights[0];
-		for(x = 1; x < Nparticles; x++){
+		#pragma acc parallel loop
+		for(x = 0; x < Nparticles; x++){
 			CDF[x] = weights[x] + CDF[x-1];
+			if (x == 0) CDF[0] = weights[0];
 		}
 		long long cum_sum = get_time();
 		printf("TIME TO CALC CUM SUM TOOK: %f\n", elapsed_time(move_time, cum_sum));
 		double u1 = (1/((double)(Nparticles)))*randu(seed, 0);
-		#pragma omp parallel for shared(u, u1, Nparticles) private(x)
+		#pragma acc parallel loop
 		for(x = 0; x < Nparticles; x++){
 			u[x] = u1 + x/((double)(Nparticles));
 		}
@@ -483,7 +494,7 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 		printf("TIME TO CALC U TOOK: %f\n", elapsed_time(cum_sum, u_time));
 		int j, i;
 		
-		#pragma omp parallel for shared(CDF, Nparticles, xj, yj, u, arrayX, arrayY) private(i, j)
+		#pragma acc parallel loop
 		for(j = 0; j < Nparticles; j++){
 			i = findIndex(CDF, Nparticles, u[j]);
 			if(i == -1)
@@ -494,23 +505,21 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 		}
 		long long xyj_time = get_time();
 		printf("TIME TO CALC NEW ARRAY X AND Y TOOK: %f\n", elapsed_time(u_time, xyj_time));
-		
-		//#pragma omp parallel for shared(weights, Nparticles) private(x)
+		//reassign arrayX and arrayY
+		arrayX = xj;
+		arrayY = yj;
+		#pragma acc parallel loop
 		for(x = 0; x < Nparticles; x++){
-			//reassign arrayX and arrayY
-			arrayX[x] = xj[x];
-			arrayY[x] = yj[x];
 			weights[x] = 1/((double)(Nparticles));
 		}
 		long long reset = get_time();
 		printf("TIME TO RESET WEIGHTS TOOK: %f\n", elapsed_time(xyj_time, reset));
 	}
+	} /* end pragma acc data */
 	free(disk);
 	free(objxy);
 	free(weights);
 	free(likelihood);
-	free(xj);
-	free(yj);
 	free(arrayX);
 	free(arrayY);
 	free(CDF);
@@ -519,7 +528,7 @@ void particleFilter(int * I, int IszX, int IszY, int Nfr, int * seed, int Nparti
 }
 int main(int argc, char * argv[]){
 	
-	char* usage = "openmp.out -x <dimX> -y <dimY> -z <Nfr> -np <Nparticles>";
+	char* usage = "particle_filter -x <dimX> -y <dimY> -z <Nfr> -np <Nparticles>";
 	//check number of arguments
 	if(argc != 9)
 	{
