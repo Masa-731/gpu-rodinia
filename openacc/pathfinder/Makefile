@@ -1,7 +1,7 @@
-CC = g++
+CC = nvc++
 SRC = pathfinder.cpp
 EXE = pathfinder
-FLAGS = -fopenmp
+FLAGS = -acc -Minfo=accel
 
 release:
 	$(CC) $(SRC) $(FLAGS) -o $(EXE)
