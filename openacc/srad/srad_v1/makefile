@@ -9,15 +9,15 @@
 
 # link objects(binaries) together
 a.out:	main.o
-	gcc	main.o \
-			-lm -fopenmp -o srad
+	nvc	main.o \
+			-lm -acc -Minfo=accel -gpu=cc86 -o srad
 
 # compile main function file into object (binary)
 main.o: 	main.c \
 				define.c \
 				graphics.c
-	gcc	main.c \
-			-c -O3 -fopenmp
+	nvc	main.c \
+			-c -acc -Minfo=accel -gpu=cc86 -fast
 
 # delete all object files
 clean:

@@ -1,6 +1,6 @@
 # C compiler
-CC = g++
-CC_FLAGS = -g -fopenmp -O2
+CC = nvc++
+CC_FLAGS = -g -fast -acc -Minfo=accel -gpu=cc86
 
 bfs: 
 	$(CC) $(CC_FLAGS) srad.cpp -o srad 

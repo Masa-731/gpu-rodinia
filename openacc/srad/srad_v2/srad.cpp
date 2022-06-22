@@ -1,7 +1,7 @@
 // srad.cpp : Defines the entry point for the console application.
 //
 
-//#define OUTPUT
+// #define OUTPUT
 
 
 #define OPEN
@@ -10,20 +10,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <omp.h>
 
 void random_matrix(float *I, int rows, int cols);
 
 void usage(int argc, char **argv)
 {
-	fprintf(stderr, "Usage: %s <rows> <cols> <y1> <y2> <x1> <x2> <no. of threads><lamda> <no. of iter>\n", argv[0]);
+	fprintf(stderr, "Usage: %s <rows> <cols> <y1> <y2> <x1> <x2> <lamda> <no. of iter>\n", argv[0]);
 	fprintf(stderr, "\t<rows>   - number of rows\n");
 	fprintf(stderr, "\t<cols>    - number of cols\n");
 	fprintf(stderr, "\t<y1> 	 - y1 value of the speckle\n");
 	fprintf(stderr, "\t<y2>      - y2 value of the speckle\n");
 	fprintf(stderr, "\t<x1>       - x1 value of the speckle\n");
 	fprintf(stderr, "\t<x2>       - x2 value of the speckle\n");
-	fprintf(stderr, "\t<no. of threads>  - no. of threads\n");
 	fprintf(stderr, "\t<lamda>   - lambda (0,1)\n");
 	fprintf(stderr, "\t<no. of iter>   - number of iterations\n");
 	
@@ -42,7 +40,6 @@ int main(int argc, char* argv[])
 	float *c, D;
 	float lambda;
 	int i, j;
-    int nthreads;
 
 	if (argc == 10)
 	{
@@ -56,9 +53,8 @@ int main(int argc, char* argv[])
 		r2   = atoi(argv[4]); //y2 position of the speckle
 		c1   = atoi(argv[5]); //x1 position of the speckle
 		c2   = atoi(argv[6]); //x2 position of the speckle
-		nthreads = atoi(argv[7]); // number of threads
-		lambda = atof(argv[8]); //Lambda value
-		niter = atoi(argv[9]); //number of iterations
+		lambda = atof(argv[7]); //Lambda value
+		niter = atoi(argv[8]); //number of iterations
 	}
     else{
 		usage(argc, argv);
@@ -83,34 +79,42 @@ int main(int argc, char* argv[])
     dW = (float *)malloc(sizeof(float)* size_I) ;
     dE = (float *)malloc(sizeof(float)* size_I) ;    
     
-
+	#pragma acc enter data create(iN[0:rows], iS[0:rows], jW[0:cols], jE[0:cols])
+    #pragma acc parallel loop
     for (int i=0; i< rows; i++) {
         iN[i] = i-1;
         iS[i] = i+1;
-    }    
+        if (i == 0) iN[0] = 0;
+        if (i == rows-1) iS[rows-1] = rows-1;
+    }
+    #pragma acc parallel loop
     for (int j=0; j< cols; j++) {
         jW[j] = j-1;
         jE[j] = j+1;
+        if (j == 0) jW[0] = 0;
+        if (j == cols-1) jE[cols-1] = cols-1;
     }
-    iN[0]    = 0;
-    iS[rows-1] = rows-1;
-    jW[0]    = 0;
-    jE[cols-1] = cols-1;
 	
 	printf("Randomizing the input matrix\n");
 
     random_matrix(I, rows, cols);
 
+    #pragma acc parallel loop copyin(I[0:size_I]) create(J[0:size_I])
     for (k = 0;  k < size_I; k++ ) {
      	J[k] = (float)exp(I[k]) ;
     }
    
 	printf("Start the SRAD main loop\n");
 
+	#pragma acc data copyout(J[0:size_I]) \
+		create(dN[0:size_I], dS[0:size_I], dW[0:size_I], dE[0:size_I], c[0:size_I]) \
+		present(iN, iS, jW, jE)
+	{
 #ifdef ITERATION
 	for (iter=0; iter< niter; iter++){
 #endif        
 		sum=0; sum2=0;     
+		#pragma acc parallel loop vector reduction(+:sum,sum2) collapse(2)
 		for (i=r1; i<=r2; i++) {
             for (j=c1; j<=c2; j++) {
                 tmp   = J[i * cols + j];
@@ -123,10 +127,7 @@ int main(int argc, char* argv[])
         q0sqr   = varROI / (meanROI*meanROI);
 		
 
-#ifdef OPEN
-		omp_set_num_threads(nthreads);
-		#pragma omp parallel for shared(J, dN, dS, dW, dE, c, rows, cols, iN, iS, jW, jE) private(i, j, k, Jc, G2, L, num, den, qsqr)
-#endif    
+        #pragma acc parallel loop collapse(2)
 		for (int i = 0 ; i < rows ; i++) {
             for (int j = 0; j < cols; j++) { 
 		
@@ -156,13 +157,10 @@ int main(int argc, char* argv[])
                 if (c[k] < 0) {c[k] = 0;}
                 else if (c[k] > 1) {c[k] = 1;}
    
-		}
-  
-    }
-#ifdef OPEN
-		omp_set_num_threads(nthreads);
-		#pragma omp parallel for shared(J, c, rows, cols, lambda) private(i, j, k, D, cS, cN, cW, cE)
-#endif 
+			}
+    	}
+
+    	#pragma acc parallel loop collapse(2)
 		for (int i = 0; i < rows; i++) {
             for (int j = 0; j < cols; j++) {        
 
@@ -192,6 +190,8 @@ int main(int argc, char* argv[])
 #ifdef ITERATION
 	}
 #endif
+
+	} /* end pragma acc data */
 
 
 #ifdef OUTPUT
@@ -236,4 +236,3 @@ void random_matrix(float *I, int rows, int cols){
 	}
 
 }
-
