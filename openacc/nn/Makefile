@@ -1,6 +1,6 @@
 LOCAL_CC = gcc -g -O3 -Wall
-CC = gcc
-CFLAGS = -lm -fopenmp -Wall
+CC = nvc++
+CFLAGS = -Minfo=acc -fast -acc
 
 
 all : nn
@@ -8,7 +8,7 @@ all : nn
 clean :
 	rm -rf *.o nn
 
-nn : nn_openmp.c
+nn : nn_openmp.cpp
 	$(CC) -o $@ $< $(LDFLAGS) $(CFLAGS) 
 
 hurricane_gen : hurricane_gen.c

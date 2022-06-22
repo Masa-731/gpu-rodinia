@@ -109,7 +109,7 @@ void  kernel_cpu(	par_str par,
 	//	PROCESS INTERACTIONS
 	//======================================================================================================================================================150
 
-#pragma acc parallel loop copy(fv[:dim.space_elem]) copyin(box[:dim.number_boxes], rv[:dim.space_elem], qv[:dim.space_elem])
+#pragma acc parallel loop copy(fv[:dim.space_elem]) copyin(box[:dim.number_boxes], rv[:dim.space_elem], qv[:dim.space_elem] ,dim, d)
 	for(l=0; l<dim.number_boxes; l=l+1){
 
 		//------------------------------------------------------------------------------------------100
